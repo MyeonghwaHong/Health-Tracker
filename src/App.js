@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Check, X, TrendingUp, Droplets, Utensils, Weight, ChevronLeft, ChevronRight, Camera, Clock } from 'lucide-react';
+import { Calendar, Plus, Check, X, TrendingUp, Droplets, Utensils, Scale, ChevronLeft, ChevronRight, Camera, Clock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const HealthTrackerApp = () => {
@@ -586,7 +586,7 @@ const HealthTrackerApp = () => {
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center">
-              <Weight className="w-5 h-5 text-purple-500 mr-2" />
+              <Scale className="w-5 h-5 text-purple-500 mr-2" />
               <h3 className="font-semibold">공복 체중</h3>
             </div>
             <button
