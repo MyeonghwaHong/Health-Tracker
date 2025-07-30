@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Check, X, TrendingUp, Droplets, Utensils, Scale, ChevronLeft, ChevronRight, Camera, Clock } from 'lucide-react';
+import { Calendar, Plus, Check, X, TrendingUp, Droplets, Utensils, Scale, ChevronLeft, ChevronRight, Camera, Clock, User, LogOut, Save, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const HealthTrackerApp = () => {
+  // 인증 상태
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [users, setUsers] = useState({}); // 사용자 데이터베이스 (메모리)
+  
+  // 로그인/회원가입 폼 상태
+  const [authMode, setAuthMode] = useState('login'); // 'login' 또는 'register'
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [authError, setAuthError] = useState('');
+
+  // 기존 상태들
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [healthData, setHealthData] = useState({});
@@ -11,7 +23,185 @@ const HealthTrackerApp = () => {
   const [tempTime, setTempTime] = useState('');
   const [tempPhoto, setTempPhoto] = useState(null);
 
-  // 초기 데이터 설정
+  // localStorage 안전 래퍼 함수들
+  const getFromStorage = (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+
+  const setToStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // 저장 실패 시 무시
+    }
+  };
+
+  const removeFromStorage = (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // 삭제 실패 시 무시
+    }
+  };
+
+  // 앱 초기화 - 저장된 로그인 정보 확인
+  useEffect(() => {
+    const savedUserStr = getFromStorage('currentUser');
+    const savedUsersStr = getFromStorage('users');
+    
+    if (savedUserStr && savedUsersStr) {
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        const savedUsers = JSON.parse(savedUsersStr);
+        
+        if (savedUser && savedUsers[savedUser.email]) {
+          setCurrentUser(savedUser);
+          setIsAuthenticated(true);
+          setUsers(savedUsers);
+          // 사용자의 건강 데이터 로드
+          const userData = savedUsers[savedUser.email];
+          setHealthData(userData.healthData || {});
+        }
+      } catch (error) {
+        console.log('Error parsing saved data');
+      }
+    }
+  }, []);
+
+  // 사용자 데이터 저장 (메모리 + localStorage 시뮬레이션)
+  const saveUserData = (userData) => {
+    const updatedUsers = {
+      ...users,
+      [currentUser.email]: {
+        ...users[currentUser.email],
+        ...userData
+      }
+    };
+    setUsers(updatedUsers);
+    
+    // localStorage 저장
+    setToStorage('users', JSON.stringify(updatedUsers));
+  };
+
+  // 건강 데이터 변경 시 자동 저장
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      saveUserData({ healthData });
+    }
+  }, [healthData, isAuthenticated, currentUser]);
+
+  // 회원가입
+  const handleRegister = () => {
+    const { name, email, password, confirmPassword } = registerForm;
+    
+    if (!name || !email || !password) {
+      setAuthError('모든 필드를 입력해주세요.');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setAuthError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    
+    if (users[email]) {
+      setAuthError('이미 존재하는 이메일입니다.');
+      return;
+    }
+    
+    const newUser = { name, email, password, healthData: {} };
+    const updatedUsers = { ...users, [email]: newUser };
+    
+    setUsers(updatedUsers);
+    setCurrentUser({ name, email });
+    setIsAuthenticated(true);
+    setAuthError('');
+    
+    // localStorage 저장
+    setToStorage('users', JSON.stringify(updatedUsers));
+    setToStorage('currentUser', JSON.stringify({ name, email }));
+  };
+
+  // 로그인
+  const handleLogin = () => {
+    const { email, password } = loginForm;
+    
+    if (!email || !password) {
+      setAuthError('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    
+    const user = users[email];
+    if (!user || user.password !== password) {
+      setAuthError('잘못된 이메일 또는 비밀번호입니다.');
+      return;
+    }
+    
+    setCurrentUser({ name: user.name, email });
+    setIsAuthenticated(true);
+    setHealthData(user.healthData || {});
+    setAuthError('');
+    
+    // localStorage 저장
+    setToStorage('currentUser', JSON.stringify({ name: user.name, email }));
+  };
+
+  // 로그아웃
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setHealthData({});
+    
+    // localStorage 정리
+    removeFromStorage('currentUser');
+  };
+
+  // 데이터 내보내기
+  const exportData = () => {
+    const dataToExport = {
+      user: currentUser,
+      healthData: healthData,
+      exportDate: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(dataToExport, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `health-data-${currentUser.email}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // 데이터 가져오기
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        if (importedData.healthData) {
+          setHealthData(importedData.healthData);
+          alert('데이터를 성공적으로 가져왔습니다!');
+        }
+      } catch (error) {
+        alert('잘못된 파일 형식입니다.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // 기존 함수들
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     if (!healthData[today]) {
@@ -33,9 +223,8 @@ const HealthTrackerApp = () => {
         }
       }));
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  // 날짜 포맷팅
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('ko-KR', {
       year: 'numeric',
@@ -44,7 +233,6 @@ const HealthTrackerApp = () => {
     });
   };
 
-  // 달력 렌더링을 위한 날짜 계산
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -55,12 +243,10 @@ const HealthTrackerApp = () => {
 
     const days = [];
     
-    // 이전 달의 빈 날짜들
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
     
-    // 현재 달의 날짜들
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
     }
@@ -68,7 +254,6 @@ const HealthTrackerApp = () => {
     return days;
   };
 
-  // 월 변경
   const changeMonth = (direction) => {
     setCurrentDate(prev => {
       const newDate = new Date(prev);
@@ -77,12 +262,10 @@ const HealthTrackerApp = () => {
     });
   };
 
-  // 날짜 선택
   const selectDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
     setSelectedDate(dateStr);
     
-    // 해당 날짜의 데이터가 없으면 초기화
     if (!healthData[dateStr]) {
       setHealthData(prev => ({
         ...prev,
@@ -104,11 +287,9 @@ const HealthTrackerApp = () => {
     }
   };
 
-  // 물 섭취 설정 업데이트
   const updateWaterSettings = (count, targetAmount) => {
     const newRecords = Array(count).fill({ amount: '', completed: false, time: '' });
-    // 기존 데이터가 있으면 보존
-    if (healthData[selectedDate]?.water?.records) {
+    if (healthData[selectedDate] && healthData[selectedDate].water && healthData[selectedDate].water.records) {
       healthData[selectedDate].water.records.forEach((record, index) => {
         if (index < count) {
           newRecords[index] = record;
@@ -129,7 +310,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 물 섭취 기록
   const updateWater = (index, amount) => {
     setHealthData(prev => ({
       ...prev,
@@ -145,7 +325,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 물 섭취 완료
   const toggleWaterComplete = (index) => {
     const currentTime = new Date().toLocaleTimeString('ko-KR', { 
       hour: '2-digit', 
@@ -170,7 +349,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 물 섭취 진행률 계산
   const getWaterProgress = () => {
     const waterData = currentData.water;
     if (!waterData) return { current: 0, target: 2000, percentage: 0 };
@@ -191,11 +369,9 @@ const HealthTrackerApp = () => {
     };
   };
 
-  // 식사 설정 업데이트
   const updateMealSettings = (count, labels) => {
     const newRecords = Array(count).fill({ food: '', completed: false, time: '', photo: null });
-    // 기존 데이터가 있으면 보존
-    if (healthData[selectedDate]?.meals?.records) {
+    if (healthData[selectedDate] && healthData[selectedDate].meals && healthData[selectedDate].meals.records) {
       healthData[selectedDate].meals.records.forEach((record, index) => {
         if (index < count) {
           newRecords[index] = record;
@@ -216,7 +392,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 식사 기록
   const updateMeal = (index, food, time, photo) => {
     setHealthData(prev => ({
       ...prev,
@@ -232,7 +407,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 식사 완료
   const toggleMealComplete = (index) => {
     setHealthData(prev => ({
       ...prev,
@@ -251,18 +425,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 사진 업로드 핸들러
-  const handlePhotoUpload = (file, mealIndex) => {
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        updateMeal(mealIndex, undefined, undefined, e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // 체중 기록
   const updateWeight = (weight) => {
     setHealthData(prev => ({
       ...prev,
@@ -273,7 +435,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 운동 기록
   const updateExercise = (type, duration) => {
     setHealthData(prev => ({
       ...prev,
@@ -284,7 +445,6 @@ const HealthTrackerApp = () => {
     }));
   };
 
-  // 체중 차트 데이터 생성
   const getWeightChartData = () => {
     return Object.entries(healthData)
       .filter(([date, data]) => data.weight)
@@ -295,7 +455,6 @@ const HealthTrackerApp = () => {
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   };
 
-  // 모달 핸들러
   const openModal = (type, index = null) => {
     setActiveModal({ type, index });
     if (type === 'waterSettings') {
@@ -348,7 +507,7 @@ const HealthTrackerApp = () => {
         break;
       case 'exercise':
         const [exerciseType, duration] = tempData.split(',');
-        updateExercise(exerciseType?.trim() || '', duration?.trim() || '');
+        updateExercise(exerciseType && exerciseType.trim() || '', duration && duration.trim() || '');
         break;
     }
     
@@ -373,11 +532,179 @@ const HealthTrackerApp = () => {
   const days = getDaysInMonth(currentDate);
   const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
 
+  // 로그인이 안된 상태일 때 로그인/회원가입 화면
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto bg-white min-h-screen flex items-center justify-center">
+        <div className="w-full p-6">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">건강관리</h1>
+            <p className="text-gray-600">건강한 하루를 기록해보세요</p>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setAuthMode('login')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  authMode === 'login' 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-500'
+                }`}
+              >
+                로그인
+              </button>
+              <button
+                onClick={() => setAuthMode('register')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  authMode === 'register' 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-500'
+                }`}
+              >
+                회원가입
+              </button>
+            </div>
+          </div>
+
+          {authError && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">
+              {authError}
+            </div>
+          )}
+
+          {authMode === 'login' ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                <input
+                  type="email"
+                  value={loginForm.email}
+                  onChange={(e) => setLoginForm(prev => ({...prev, email: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="이메일을 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm(prev => ({...prev, password: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="비밀번호를 입력하세요"
+                />
+              </div>
+              <button
+                onClick={handleLogin}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                로그인
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                <input
+                  type="text"
+                  value={registerForm.name}
+                  onChange={(e) => setRegisterForm(prev => ({...prev, name: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="이름을 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                <input
+                  type="email"
+                  value={registerForm.email}
+                  onChange={(e) => setRegisterForm(prev => ({...prev, email: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="이메일을 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={registerForm.password}
+                  onChange={(e) => setRegisterForm(prev => ({...prev, password: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="비밀번호를 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
+                <input
+                  type="password"
+                  value={registerForm.confirmPassword}
+                  onChange={(e) => setRegisterForm(prev => ({...prev, confirmPassword: e.target.value}))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="비밀번호를 다시 입력하세요"
+                />
+              </div>
+              <button
+                onClick={handleRegister}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                회원가입
+              </button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              {authMode === 'login' ? 
+                '계정이 없으신가요? 회원가입을 눌러주세요.' : 
+                '이미 계정이 있으신가요? 로그인을 눌러주세요.'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 로그인된 상태 - 기존 건강관리 앱
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen">
       {/* 헤더 */}
       <div className="bg-blue-600 text-white p-4">
-        <h1 className="text-xl font-bold text-center">건강관리</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <User className="w-5 h-5 mr-2" />
+            <div>
+              <h1 className="text-lg font-bold">건강관리</h1>
+              <p className="text-xs text-blue-100">{currentUser.name}님 환영합니다</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={exportData}
+              title="데이터 내보내기"
+              className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            <label title="데이터 가져오기" className="p-2 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer">
+              <Save className="w-4 h-4" />
+              <input
+                type="file"
+                accept=".json"
+                onChange={importData}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={handleLogout}
+              title="로그아웃"
+              className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 달력 */}
