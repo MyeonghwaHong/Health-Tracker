@@ -225,8 +225,19 @@ const HealthTrackerApp = () => {
     }
   }, [isAuthenticated, selectedDate]); // selectedDate가 변경될 때마다 해당 날짜의 데이터 초기화 확인
 
+  // Helper function to format date consistently
+  const getLocalDateString = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('ko-KR', {
+    // Ensure date is treated as local date
+    const d = new Date(date);
+    return d.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -263,7 +274,8 @@ const HealthTrackerApp = () => {
   };
 
   const selectDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Use getLocalDateString to ensure the date string is consistent
+    const dateStr = getLocalDateString(date);
     setSelectedDate(dateStr);
     
     if (!healthData[dateStr]) {
@@ -437,14 +449,16 @@ const HealthTrackerApp = () => {
     return Object.entries(healthData)
       .filter(([date, data]) => data.weight)
       .map(([date, data]) => ({
-        date: new Date(date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+        // Ensure the date for display is localized consistently
+        date: formatDate(date), // Use formatDate for chart labels
         weight: parseFloat(data.weight)
       }))
-      .sort((a, b) => new Date(Object.keys(healthData).find(key => 
-        new Date(key).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) === a.date
-      )) - new Date(Object.keys(healthData).find(key => 
-        new Date(key).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) === b.date
-      ))); // 이른 날짜에서 최신 날짜로 정렬
+      .sort((a, b) => {
+        // Correct sorting for chart data based on the actual date strings
+        const dateA = Object.keys(healthData).find(key => formatDate(key) === a.date);
+        const dateB = Object.keys(healthData).find(key => formatDate(key) === b.date);
+        return new Date(dateA) - new Date(dateB);
+      });
   };
 
   const openModal = (type, index = null) => {
@@ -729,7 +743,7 @@ const HealthTrackerApp = () => {
                 onClick={() => day && selectDate(day)}
                 className={`p-2 text-sm rounded ${
                   day
-                    ? day.toISOString().split('T')[0] === selectedDate
+                    ? getLocalDateString(day) === selectedDate // Compare using local date string
                       ? 'bg-blue-600 text-white'
                       : 'hover:bg-gray-100'
                     : ''
@@ -953,7 +967,7 @@ const HealthTrackerApp = () => {
               {activeModal.type === 'waterSettings' && '물 섭취 설정'}
               {activeModal.type === 'meal' && `${currentData.meals.labels[activeModal.index] || '식사'} 기록`}
               {activeModal.type === 'mealSettings' && '식사 설정'}
-              {activeModal.type === 'weight' && '공복 체중'}
+              {activeModal.type === 'weight' && `공복 체중 (${formatDate(selectedDate)})`} {/* Display date here */}
               {activeModal.type === 'exercise' && '운동'}
             </h3>
             
