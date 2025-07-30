@@ -7,7 +7,7 @@ const HealthTrackerApp = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState({}); // 사용자 데이터베이스 (메모리)
-  
+
   // 로그인/회원가입 폼 상태
   const [authMode, setAuthMode] = useState('login'); // 'login' 또는 'register'
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -52,12 +52,12 @@ const HealthTrackerApp = () => {
   useEffect(() => {
     const savedUserStr = getFromStorage('currentUser');
     const savedUsersStr = getFromStorage('users');
-    
+
     if (savedUserStr && savedUsersStr) {
       try {
         const savedUser = JSON.parse(savedUserStr);
         const savedUsers = JSON.parse(savedUsersStr);
-        
+
         if (savedUser && savedUsers[savedUser.email]) {
           setCurrentUser(savedUser);
           setIsAuthenticated(true);
@@ -67,7 +67,7 @@ const HealthTrackerApp = () => {
           setHealthData(userData.healthData || {});
         }
       } catch (error) {
-        console.log('Error parsing saved data');
+        console.log('Error parsing saved data', error);
       }
     }
   }, []);
@@ -82,7 +82,7 @@ const HealthTrackerApp = () => {
       }
     };
     setUsers(updatedUsers);
-    
+
     // localStorage 저장
     setToStorage('users', JSON.stringify(updatedUsers));
   };
@@ -97,30 +97,30 @@ const HealthTrackerApp = () => {
   // 회원가입
   const handleRegister = () => {
     const { name, email, password, confirmPassword } = registerForm;
-    
+
     if (!name || !email || !password) {
       setAuthError('모든 필드를 입력해주세요.');
       return;
     }
-    
+
     if (password !== confirmPassword) {
       setAuthError('비밀번호가 일치하지 않습니다.');
       return;
     }
-    
+
     if (users[email]) {
       setAuthError('이미 존재하는 이메일입니다.');
       return;
     }
-    
+
     const newUser = { name, email, password, healthData: {} };
     const updatedUsers = { ...users, [email]: newUser };
-    
+
     setUsers(updatedUsers);
     setCurrentUser({ name, email });
     setIsAuthenticated(true);
     setAuthError('');
-    
+
     // localStorage 저장
     setToStorage('users', JSON.stringify(updatedUsers));
     setToStorage('currentUser', JSON.stringify({ name, email }));
@@ -129,23 +129,23 @@ const HealthTrackerApp = () => {
   // 로그인
   const handleLogin = () => {
     const { email, password } = loginForm;
-    
+
     if (!email || !password) {
       setAuthError('이메일과 비밀번호를 입력해주세요.');
       return;
     }
-    
+
     const user = users[email];
     if (!user || user.password !== password) {
       setAuthError('잘못된 이메일 또는 비밀번호입니다.');
       return;
     }
-    
+
     setCurrentUser({ name: user.name, email });
     setIsAuthenticated(true);
     setHealthData(user.healthData || {});
     setAuthError('');
-    
+
     // localStorage 저장
     setToStorage('currentUser', JSON.stringify({ name: user.name, email }));
   };
@@ -155,7 +155,7 @@ const HealthTrackerApp = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setHealthData({});
-    
+
     // localStorage 정리
     removeFromStorage('currentUser');
   };
@@ -167,11 +167,11 @@ const HealthTrackerApp = () => {
       healthData: healthData,
       exportDate: new Date().toISOString()
     };
-    
+
     const dataStr = JSON.stringify(dataToExport, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `health-data-${currentUser.email}-${new Date().toISOString().split('T')[0]}.json`;
@@ -185,7 +185,7 @@ const HealthTrackerApp = () => {
   const importData = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -253,15 +253,15 @@ const HealthTrackerApp = () => {
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-    
+
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
     }
-    
+
     return days;
   };
 
@@ -277,7 +277,7 @@ const HealthTrackerApp = () => {
     // Use getLocalDateString to ensure the date string is consistent
     const dateStr = getLocalDateString(date);
     setSelectedDate(dateStr);
-    
+
     if (!healthData[dateStr]) {
       setHealthData(prev => ({
         ...prev,
@@ -308,7 +308,7 @@ const HealthTrackerApp = () => {
         }
       });
     }
-    
+
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
@@ -326,31 +326,37 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate].water,
-        records: prev[selectedDate].water.records.map((item, i) => 
-            i === index ? { ...item, amount } : item
-        )
+        ...prev[selectedDate], // Preserve other categories for selectedDate
+        water: {
+          ...prev[selectedDate].water, // Preserve water settings (count, targetAmount)
+          records: prev[selectedDate].water.records.map((item, i) =>
+              i === index ? { ...item, amount } : item
+          )
+        }
       }
     }));
   };
 
   const toggleWaterComplete = (index) => {
-    const currentTime = new Date().toLocaleTimeString('ko-KR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    const currentTime = new Date().toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
-    
+
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate].water,
-        records: prev[selectedDate].water.records.map((item, i) => 
-            i === index ? { 
-              ...item, 
-              completed: !item.completed,
-              time: !item.completed ? currentTime : ''
-            } : item
-        )
+        ...prev[selectedDate], // Preserve other categories for selectedDate
+        water: {
+          ...prev[selectedDate].water, // Preserve water settings (count, targetAmount)
+          records: prev[selectedDate].water.records.map((item, i) =>
+              i === index ? {
+                ...item,
+                completed: !item.completed,
+                time: !item.completed ? currentTime : ''
+              } : item
+          )
+        }
       }
     }));
   };
@@ -358,16 +364,16 @@ const HealthTrackerApp = () => {
   const getWaterProgress = () => {
     const waterData = currentData.water;
     if (!waterData) return { current: 0, target: 2000, percentage: 0 };
-    
+
     const current = waterData.records
       .filter(record => record.completed && record.amount)
       .reduce((sum, record) => {
         const amount = parseFloat(record.amount.replace(/[^0-9.]/g, '')) || 0;
         return sum + amount;
       }, 0);
-    
+
     const percentage = Math.min((current / waterData.targetAmount) * 100, 100);
-    
+
     return {
       current: Math.round(current),
       target: waterData.targetAmount,
@@ -384,7 +390,7 @@ const HealthTrackerApp = () => {
         }
       });
     }
-    
+
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
@@ -402,10 +408,13 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate].meals,
-        records: prev[selectedDate].meals.records.map((item, i) => 
-            i === index ? { ...item, food, time: time || item.time, photo: photo !== undefined ? photo : item.photo } : item
-        )
+        ...prev[selectedDate], // Preserve other categories for selectedDate
+        meals: {
+          ...prev[selectedDate].meals, // Preserve meal settings (count, labels)
+          records: prev[selectedDate].meals.records.map((item, i) =>
+              i === index ? { ...item, food, time: time || item.time, photo: photo !== undefined ? photo : item.photo } : item
+          )
+        }
       }
     }));
   };
@@ -414,13 +423,16 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate].meals,
-        records: prev[selectedDate].meals.records.map((item, i) => 
-            i === index ? { 
-              ...item, 
-              completed: !item.completed
-            } : item
-        )
+        ...prev[selectedDate], // Preserve other categories for selectedDate
+        meals: {
+          ...prev[selectedDate].meals, // Preserve meal settings (count, labels)
+          records: prev[selectedDate].meals.records.map((item, i) =>
+              i === index ? {
+                ...item,
+                completed: !item.completed
+              } : item
+          )
+        }
       }
     }));
   };
@@ -490,7 +502,7 @@ const HealthTrackerApp = () => {
 
   const saveModalData = () => {
     const { type, index } = activeModal;
-    
+
     switch (type) {
       case 'water':
         updateWater(index, tempData);
@@ -515,8 +527,10 @@ const HealthTrackerApp = () => {
         const [exerciseType, duration] = tempData.split(',');
         updateExercise(exerciseType && exerciseType.trim() || '', duration && duration.trim() || '');
         break;
+      default:
+        break; // Handle unknown types gracefully
     }
-    
+
     closeModal();
   };
 
@@ -553,8 +567,8 @@ const HealthTrackerApp = () => {
               <button
                 onClick={() => setAuthMode('login')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  authMode === 'login' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
+                  authMode === 'login'
+                    ? 'bg-white text-blue-600 shadow-sm'
                     : 'text-gray-500'
                 }`}
               >
@@ -563,8 +577,8 @@ const HealthTrackerApp = () => {
               <button
                 onClick={() => setAuthMode('register')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  authMode === 'register' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
+                  authMode === 'register'
+                    ? 'bg-white text-blue-600 shadow-sm'
                     : 'text-gray-500'
                 }`}
               >
@@ -661,8 +675,8 @@ const HealthTrackerApp = () => {
 
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
-              {authMode === 'login' ? 
-                '계정이 없으신가요? 회원가입을 눌러주세요.' : 
+              {authMode === 'login' ?
+                '계정이 없으신가요? 회원가입을 눌러주세요.' :
                 '이미 계정이 있으신가요? 로그인을 눌러주세요.'
               }
             </p>
@@ -727,7 +741,7 @@ const HealthTrackerApp = () => {
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
-          
+
           <div className="grid grid-cols-7 gap-1 mb-2">
             {weekDays.map(day => (
               <div key={day} className="text-center text-sm font-medium text-gray-500 p-2">
@@ -735,7 +749,7 @@ const HealthTrackerApp = () => {
               </div>
             ))}
           </div>
-          
+
           <div className="grid grid-cols-7 gap-1">
             {days.map((day, index) => (
               <button
@@ -778,15 +792,15 @@ const HealthTrackerApp = () => {
               설정
             </button>
           </div>
-          
+
           <div className={`grid gap-2 mb-4`} style={{ gridTemplateColumns: `repeat(${Math.min(currentData.water.count, 5)}, 1fr)` }}>
             {currentData.water.records.map((water, index) => (
               <div key={index} className="text-center">
                 <button
                   onClick={() => openModal('water', index)}
                   className={`w-full p-2 text-xs border rounded mb-1 ${
-                    water.completed 
-                      ? 'bg-blue-100 text-blue-600 opacity-60' 
+                    water.completed
+                      ? 'bg-blue-100 text-blue-600 opacity-60'
                       : 'border-gray-300 hover:border-blue-300'
                   }`}
                 >
@@ -796,8 +810,8 @@ const HealthTrackerApp = () => {
                   <button
                     onClick={() => toggleWaterComplete(index)}
                     className={`w-full text-xs p-1 rounded ${
-                      water.completed 
-                        ? 'bg-green-500 text-white' 
+                      water.completed
+                        ? 'bg-green-500 text-white'
                         : 'bg-gray-200 text-gray-600'
                     }`}
                   >
@@ -817,7 +831,7 @@ const HealthTrackerApp = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
+              <div
                 className="bg-blue-500 h-3 rounded-full transition-all duration-300"
                 style={{ width: `${getWaterProgress().percentage}%` }}
               ></div>
@@ -847,40 +861,40 @@ const HealthTrackerApp = () => {
                     {currentData.meals.labels[index] || `${index + 1}끼`}
                   </span>
                 </div>
-                
+
                 {meal.photo && (
                   <div className="mb-2">
-                    <img 
-                      src={meal.photo} 
+                    <img
+                      src={meal.photo}
                       alt="식사 사진"
                       className="w-full h-16 object-cover rounded border"
                     />
                   </div>
                 )}
-                
+
                 <button
                   onClick={() => openModal('meal', index)}
                   className={`w-full p-2 text-xs border rounded mb-1 ${
-                    meal.completed 
-                      ? 'bg-orange-100 text-orange-600 opacity-60' 
+                    meal.completed
+                      ? 'bg-orange-100 text-orange-600 opacity-60'
                       : 'border-gray-300 hover:border-orange-300'
                   }`}
                 >
                   {meal.food || '메뉴 입력'}
                 </button>
-                
+
                 {meal.time && (
                   <div className="text-xs text-gray-500 mb-1">
                     {meal.time}
                   </div>
                 )}
-                
+
                 {meal.food && (
                   <button
                     onClick={() => toggleMealComplete(index)}
                     className={`w-full text-xs p-1 rounded ${
-                      meal.completed 
-                        ? 'bg-green-500 text-white' 
+                      meal.completed
+                        ? 'bg-green-500 text-white'
                         : 'bg-gray-200 text-gray-600'
                     }`}
                   >
@@ -929,7 +943,7 @@ const HealthTrackerApp = () => {
               <Plus className="w-4 h-4" />
             </button>
           </div>
-          
+
           <div className="mb-3">
             <p className="text-sm text-gray-600">
               오늘: {currentData.weight ? `${currentData.weight}kg` : '기록 없음'}
@@ -944,10 +958,10 @@ const HealthTrackerApp = () => {
                   <XAxis dataKey="date" />
                   <YAxis domain={['dataMin - 5', 'dataMax + 5']} /> {/* Y축 스케일 조정 */}
                   <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="weight" 
-                    stroke="#8884d8" 
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    stroke="#8884d8"
                     strokeWidth={2}
                     dot={{ r: 4 }}
                   />
@@ -970,7 +984,7 @@ const HealthTrackerApp = () => {
               {activeModal.type === 'weight' && `공복 체중 (${formatDate(selectedDate)})`} {/* Display date here */}
               {activeModal.type === 'exercise' && '운동'}
             </h3>
-            
+
             {activeModal.type === 'waterSettings' ? (
               <div className="space-y-4">
                 <div>
@@ -1083,9 +1097,9 @@ const HealthTrackerApp = () => {
                   />
                   {tempPhoto && (
                     <div className="mt-2">
-                      <img 
-                        src={tempPhoto} 
-                        alt="미리보기" 
+                      <img
+                        src={tempPhoto}
+                        alt="미리보기"
                         className="w-full h-32 object-cover rounded border"
                       />
                     </div>
@@ -1106,7 +1120,7 @@ const HealthTrackerApp = () => {
                 autoFocus
               />
             )}
-            
+
             <div className="flex space-x-3">
               <button
                 onClick={closeModal}
