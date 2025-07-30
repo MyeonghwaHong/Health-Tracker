@@ -15,8 +15,8 @@ const HealthTrackerApp = () => {
   const [authError, setAuthError] = useState('');
 
   // 기존 상태들
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [currentDate, setCurrentDate] = useState(new Date()); // 달력의 현재 월을 오늘 날짜 기준으로 설정
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // 선택된 날짜를 오늘 날짜로 초기화
   const [healthData, setHealthData] = useState({});
   const [activeModal, setActiveModal] = useState(null);
   const [tempData, setTempData] = useState('');
@@ -203,11 +203,11 @@ const HealthTrackerApp = () => {
 
   // 기존 함수들
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    if (!healthData[today]) {
+    // 선택된 날짜 (selectedDate) 기준으로 초기화
+    if (isAuthenticated && !healthData[selectedDate]) {
       setHealthData(prev => ({
         ...prev,
-        [today]: {
+        [selectedDate]: {
           water: {
             count: 8,
             targetAmount: 2000,
@@ -223,7 +223,7 @@ const HealthTrackerApp = () => {
         }
       }));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedDate]); // selectedDate가 변경될 때마다 해당 날짜의 데이터 초기화 확인
 
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('ko-KR', {
@@ -314,13 +314,10 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate],
-        water: {
-          ...prev[selectedDate].water,
-          records: prev[selectedDate].water.records.map((item, i) => 
+        ...prev[selectedDate].water,
+        records: prev[selectedDate].water.records.map((item, i) => 
             i === index ? { ...item, amount } : item
-          )
-        }
+        )
       }
     }));
   };
@@ -334,17 +331,14 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate],
-        water: {
-          ...prev[selectedDate].water,
-          records: prev[selectedDate].water.records.map((item, i) => 
+        ...prev[selectedDate].water,
+        records: prev[selectedDate].water.records.map((item, i) => 
             i === index ? { 
               ...item, 
               completed: !item.completed,
               time: !item.completed ? currentTime : ''
             } : item
-          )
-        }
+        )
       }
     }));
   };
@@ -396,13 +390,10 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate],
-        meals: {
-          ...prev[selectedDate].meals,
-          records: prev[selectedDate].meals.records.map((item, i) => 
+        ...prev[selectedDate].meals,
+        records: prev[selectedDate].meals.records.map((item, i) => 
             i === index ? { ...item, food, time: time || item.time, photo: photo !== undefined ? photo : item.photo } : item
-          )
-        }
+        )
       }
     }));
   };
@@ -411,16 +402,13 @@ const HealthTrackerApp = () => {
     setHealthData(prev => ({
       ...prev,
       [selectedDate]: {
-        ...prev[selectedDate],
-        meals: {
-          ...prev[selectedDate].meals,
-          records: prev[selectedDate].meals.records.map((item, i) => 
+        ...prev[selectedDate].meals,
+        records: prev[selectedDate].meals.records.map((item, i) => 
             i === index ? { 
               ...item, 
               completed: !item.completed
             } : item
-          )
-        }
+        )
       }
     }));
   };
@@ -452,7 +440,11 @@ const HealthTrackerApp = () => {
         date: new Date(date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
         weight: parseFloat(data.weight)
       }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => new Date(Object.keys(healthData).find(key => 
+        new Date(key).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) === a.date
+      )) - new Date(Object.keys(healthData).find(key => 
+        new Date(key).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) === b.date
+      ))); // 이른 날짜에서 최신 날짜로 정렬
   };
 
   const openModal = (type, index = null) => {
@@ -936,7 +928,7 @@ const HealthTrackerApp = () => {
                 <LineChart data={getWeightChartData()}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
-                  <YAxis />
+                  <YAxis domain={['dataMin - 5', 'dataMax + 5']} /> {/* Y축 스케일 조정 */}
                   <Tooltip />
                   <Line 
                     type="monotone" 
